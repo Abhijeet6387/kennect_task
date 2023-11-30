@@ -3,7 +3,7 @@ const router = express.Router();
 const Users = require("../models/UserModel");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const checkAuth = require("../utils/checkAuth");
+const CheckAuth = require("../utils/CheckAuth");
 
 //Register Route
 router.post("/register", (req, res) => {
@@ -55,7 +55,7 @@ router.post("/login", (req, res) => {
                 name: user[0].name,
                 email: user[0].email,
               },
-              "authsecretkey0101",
+              process.env.SECRET_KEY,
               {
                 expiresIn: "1h",
               }
@@ -75,23 +75,40 @@ router.post("/login", (req, res) => {
   });
 });
 
-router.get("/getUserInfo", checkAuth, (req, res) => {
-  Users.findById(req.userData.id, (err, user) => {
-    if (err) {
-      res.status(500).json({ error: err, message: "Please Retry!" });
-    } else {
+// getUserInfo
+router.get("/getUserInfo", CheckAuth, (req, res) => {
+  const token = req.headers.authorization;
+  if (!token || !token.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  const extractedToken = token.split(" ")[1];
+  try {
+    const decoded = jwt.verify(extractedToken, process.env.SECRET_KEY);
+    const userId = decoded.id;
+    Users.findById(userId, (err, user) => {
+      if (err) {
+        return res.status(500).json({ error: err, message: "Please Retry!" });
+      }
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
       const filterUser = {
         userId: user._id,
         name: user.name,
-        email: user.emal,
+        email: user.email,
         contact: user.contact,
       };
+
       return res.status(200).json({
         message: "Successful",
         info: filterUser,
       });
-    }
-  });
+    });
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid token" });
+  }
 });
 
 module.exports = router;
